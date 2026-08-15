@@ -1,18 +1,25 @@
+import bmesh
 import bpy
 from bpy.types import Operator
 
 from ..core.materials import (
     MATERIAL_SCHEMA_VERSION,
     MaterialMappingConflictError,
+    ensure_material_slot,
     find_material_with_image,
+    get_image_from_material,
     get_primary_image_from_material,
+    get_selected_reflection_probe_name,
     get_texture_node_from_material,
     get_principled_bsdf_from_material,
     is_texture_alpha_connected,
     is_vertex_colors_enabled,
     remove_unused_nodes,
     repair_material_shader,
+    resolve_material_for_image,
 )
+from ..core.face_id import get_selected_faces_or_report
+from ..core.library import is_library_object
 from ..core.logging import (
     add_performance_detail,
     begin_performance_operation_report,
@@ -485,6 +492,83 @@ class LEVELDESIGN_OT_cleanup_unused_materials(Operator):
         return {'FINISHED'}
 
 
+class LEVELDESIGN_OT_set_reflection_probe_material(Operator):
+    """Assign each selected face's probe-variant material for the selected reflection probe"""
+
+    bl_idname = "leveldesign.set_reflection_probe_material"
+    bl_label = "Set Reflection Probe Material"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.object
+        return (
+            obj is not None and obj.type == 'MESH'
+            and not is_library_object(obj)
+            and context.mode == 'EDIT_MESH'
+            and context.tool_settings.mesh_select_mode[2]
+        )
+
+    def execute(self, context):
+        obj = context.object
+        me = obj.data
+        bm = bmesh.from_edit_mesh(me)
+        bm.faces.ensure_lookup_table()
+
+        selected_faces = get_selected_faces_or_report(self, bm)
+        if selected_faces is None:
+            return {'CANCELLED'}
+
+        probe_name = get_selected_reflection_probe_name(context.scene)
+
+        assigned = 0
+        skipped = 0
+        resolved_cache = {}
+
+        for face in selected_faces:
+            mat = (
+                me.materials[face.material_index]
+                if face.material_index < len(me.materials)
+                else None
+            )
+            image = get_image_from_material(mat)
+            if image is None:
+                skipped += 1
+                continue
+
+            probe_mat = resolved_cache.get(image)
+            if probe_mat is None:
+                try:
+                    probe_mat = resolve_material_for_image(image, probe_name)
+                except MaterialMappingConflictError as exc:
+                    self.report(
+                        {'ERROR'},
+                        f"{exc}. Use Fix Material Mappings (Shift-4).",
+                    )
+                    return {'CANCELLED'}
+                resolved_cache[image] = probe_mat
+
+            face.material_index = ensure_material_slot(me, probe_mat)
+            assigned += 1
+
+        bmesh.update_edit_mesh(me)
+
+        from ..handlers import update_ui_from_selection
+        update_ui_from_selection(context)
+
+        if assigned == 0:
+            self.report({'WARNING'}, "No faces with a managed material were selected")
+        elif skipped > 0:
+            self.report(
+                {'INFO'},
+                f"Set probe material on {assigned} face(s), skipped {skipped} unmanaged",
+            )
+        else:
+            self.report({'INFO'}, f"Set probe material on {assigned} face(s)")
+
+        return {'FINISHED'}
+
+
 classes = (
     LEVELDESIGN_OT_set_interpolation_closest,
     LEVELDESIGN_OT_set_interpolation_linear,
@@ -496,6 +580,7 @@ classes = (
     LEVELDESIGN_OT_repair_material_shader,
     LEVELDESIGN_OT_set_default_interpolation,
     LEVELDESIGN_OT_cleanup_unused_materials,
+    LEVELDESIGN_OT_set_reflection_probe_material,
 )
 
 

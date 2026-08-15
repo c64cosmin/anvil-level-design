@@ -831,7 +831,13 @@ class LEVELDESIGN_PT_texture_preview_panel(Panel):
     def draw(self, context):
         layout = self.layout
         props = context.scene.level_design_props
-        layout.prop(props, "reflection_probe_camera")
+        probe_row = layout.row(align=True)
+        probe_row.prop(props, "reflection_probe_camera")
+        probe_row.operator(
+            "leveldesign.set_reflection_probe_material",
+            text="",
+            icon='COLOR',
+        )
 
         image, selected_material, mixed_materials = _texture_preview_state(
             context.mode,
