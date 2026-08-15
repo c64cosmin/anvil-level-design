@@ -516,6 +516,13 @@ class LevelDesignProperties(bpy.types.PropertyGroup):
         poll=_reflection_probe_camera_poll,
     )
 
+    selected_face_reflection_probe: PointerProperty(
+        name="Face Reflection Probe",
+        description="Read-only: reflection probe used by the selected face's material, for validation",
+        type=bpy.types.Object,
+        poll=_reflection_probe_camera_poll,
+    )
+
     default_vertex_colors: BoolProperty(
         name="Vertex Colors",
         description="Multiply texture by vertex colors for new materials",

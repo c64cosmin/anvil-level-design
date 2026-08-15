@@ -2,7 +2,11 @@
 
 import bpy
 
-from ..core.materials import get_image_from_material
+from ..core.materials import (
+    find_camera_for_reflection_probe,
+    get_image_from_material,
+    get_material_reflection_probe_name,
+)
 
 
 # The currently active image for texture operations.
@@ -101,10 +105,13 @@ def get_active_face_material(obj, mode, face_select_enabled):
 
 
 def update_active_image_from_face(context):
-    """Update the active image based on the active face's material.
+    """Update the active image and inspected reflection probe from the active face's material.
 
     Clears the active image if not in edit mode, no faces are selected,
-    or the active face has no image material.
+    or the active face has no image material. `selected_face_reflection_probe`
+    is a read-only inspection field (separate from `reflection_probe_camera`,
+    which the user sets explicitly to build/apply probe variants) that shows
+    which probe the active face's material currently belongs to, if any.
     """
     try:
         material = get_active_face_material(
@@ -114,6 +121,11 @@ def update_active_image_from_face(context):
         )
         image = get_image_from_material(material) if material is not None else None
         set_active_image(image)
+        probe_camera = None
+        if material is not None:
+            probe_name = get_material_reflection_probe_name(material)
+            probe_camera = find_camera_for_reflection_probe(probe_name)
+        context.scene.level_design_props.selected_face_reflection_probe = probe_camera
     except Exception:
         pass  # Silently fail to avoid disrupting user workflow
 

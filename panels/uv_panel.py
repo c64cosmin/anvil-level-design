@@ -891,6 +891,10 @@ class LEVELDESIGN_PT_texture_preview_panel(Panel):
                 box.scale_y = 8.0
                 box.label(text="")
 
+            inspect_row = layout.row(align=True)
+            inspect_row.enabled = False
+            inspect_row.prop(props, "selected_face_reflection_probe")
+
             # Material settings
             tex = get_texture_node_from_material(mat)
             bsdf = get_principled_bsdf_from_material(mat) if mat else None

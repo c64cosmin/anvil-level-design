@@ -145,6 +145,18 @@ def get_material_reflection_probe_name(material):
     return material.get(FORNAX_REFLECTION_GROUP_KEY, "")
 
 
+def find_camera_for_reflection_probe(name):
+    """Return the camera object tagged as this reflection probe, or None."""
+    if not name:
+        return None
+    obj = bpy.data.objects.get(name)
+    if obj is None or obj.type != 'CAMERA':
+        return None
+    if not obj.get("fornax_reflection_probe", False):
+        return None
+    return obj
+
+
 def set_material_primary_image(material, image):
     if material is None or material.library is not None:
         raise ValueError("Only local materials can be mapped")
