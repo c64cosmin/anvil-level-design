@@ -830,6 +830,9 @@ class LEVELDESIGN_PT_texture_preview_panel(Panel):
 
     def draw(self, context):
         layout = self.layout
+        props = context.scene.level_design_props
+        layout.prop(props, "reflection_probe_camera")
+
         image, selected_material, mixed_materials = _texture_preview_state(
             context.mode,
             context.tool_settings.mesh_select_mode,
@@ -960,7 +963,6 @@ class LEVELDESIGN_PT_texture_preview_panel(Panel):
 
             # Experimental settings (collapsible)
             layout.separator()
-            props = context.scene.level_design_props
             row = layout.row()
             row.prop(
                 props, "show_experimental_settings",
@@ -1133,6 +1135,26 @@ class LEVELDESIGN_PT_default_material_settings_panel(Panel):
             box.prop(props, "default_specular")
 
 
+class LEVELDESIGN_PT_reflection_probe_panel(Panel):
+    """Reflection Probe Settings"""
+
+    bl_label = "Reflection Probe"
+    bl_idname = "LEVELDESIGN_PT_reflection_probe_panel"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'Anvil Settings'
+
+    @classmethod
+    def poll(cls, context):
+        return is_level_design_workspace()
+
+    def draw(self, context):
+        layout = self.layout
+        props = context.scene.level_design_props
+
+        layout.prop(props, "reflection_probe_camera")
+
+
 class LEVELDESIGN_PT_export_panel(Panel):
     """Export Panel"""
 
@@ -1275,6 +1297,7 @@ materials_classes = (
 settings_and_export_classes = (
     LEVELDESIGN_PT_texture_settings_panel,
     LEVELDESIGN_PT_default_material_settings_panel,
+    LEVELDESIGN_PT_reflection_probe_panel,
     LEVELDESIGN_PT_export_panel,
     LEVELDESIGN_OT_toggle_debug_logging,
     LEVELDESIGN_OT_toggle_performance_logging,

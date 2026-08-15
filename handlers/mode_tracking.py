@@ -195,6 +195,97 @@ def unregister_msgbus():
     bpy.msgbus.clear_by_owner(_unit_msgbus_owner)
 
 
+# Polling for the reflection probe dropdown. view_layer.objects.active alone
+# misses Outliner clicks made while another mesh is mid-Edit-Mode — Blender
+# only updates *selection* there, not the active object, since it won't hand
+# off "active" to an object that can't share the current edit session. So
+# this watches both: active-object identity for the normal case, and
+# selection deltas (order-preserving, so a same-tick double-change still
+# resolves to the most recently selected) to catch the edit-mode case too.
+_last_reflection_probe_active_object = None
+_last_reflection_probe_selection = ()
+
+
+def _sync_reflection_probe_from_active_object():
+    """Timer callback: mirror a newly (active or Outliner-)selected probe
+    camera into the reflection probe dropdown.
+
+    The whole body is guarded by one try/except: bpy.app.timers permanently
+    stops calling a timer function the moment it raises an uncaught
+    exception (e.g. a stale ReferenceError from an object deleted/replaced
+    since the last tick), which silently kills all future updates.
+    """
+    global _last_reflection_probe_active_object, _last_reflection_probe_selection
+
+    try:
+        context = bpy.context
+        active = context.view_layer.objects.active
+        selected = tuple(context.selected_objects)
+
+        try:
+            active_changed = active != _last_reflection_probe_active_object
+        except ReferenceError:
+            active_changed = True
+        try:
+            selection_changed = selected != _last_reflection_probe_selection
+            previously_selected = set(_last_reflection_probe_selection)
+        except ReferenceError:
+            selection_changed = True
+            previously_selected = set()
+
+        if not active_changed and not selection_changed:
+            return 0.1
+
+        _last_reflection_probe_active_object = active
+        _last_reflection_probe_selection = selected
+
+        in_workspace = is_level_design_workspace()
+
+        candidate = None
+        if active_changed and active is not None and active.type == 'CAMERA' and active.get("fornax_reflection_probe", False):
+            candidate = active
+        elif selection_changed:
+            for obj in reversed(selected):
+                if obj in previously_selected:
+                    continue
+                if obj.type == 'CAMERA' and obj.get("fornax_reflection_probe", False):
+                    candidate = obj
+                    break
+
+        if in_workspace and candidate is not None:
+            scene = context.scene
+            if hasattr(scene, 'level_design_props'):
+                scene.level_design_props.reflection_probe_camera = candidate
+                print(f"Anvil: reflection probe dropdown set to '{candidate.name}'", flush=True)
+                try:
+                    from .active_image import redraw_ui_panels
+                    redraw_ui_panels(context)
+                except Exception as e:
+                    print(f"Anvil: reflection probe redraw failed: {e}", flush=True)
+    except Exception as e:
+        print(f"Anvil: reflection probe tracking error: {e}", flush=True)
+
+    return 0.1
+
+
+def start_reflection_probe_tracking():
+    """Register the repeating timer that watches for probe camera selection."""
+    if not bpy.app.timers.is_registered(_sync_reflection_probe_from_active_object):
+        bpy.app.timers.register(
+            _sync_reflection_probe_from_active_object,
+            first_interval=0.1,
+            persistent=True,
+        )
+
+
+def stop_reflection_probe_tracking():
+    global _last_reflection_probe_active_object, _last_reflection_probe_selection
+    if bpy.app.timers.is_registered(_sync_reflection_probe_from_active_object):
+        bpy.app.timers.unregister(_sync_reflection_probe_from_active_object)
+    _last_reflection_probe_active_object = None
+    _last_reflection_probe_selection = ()
+
+
 def reset_mode_tracking():
     """Reset mode tracking state (called on file load)."""
     global _last_tracked_mode

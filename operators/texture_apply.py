@@ -12,6 +12,7 @@ from ..core.geometry import normalize_offset
 from ..core.materials import (
     MaterialMappingConflictError,
     ensure_material_slot,
+    get_selected_reflection_probe_name,
     get_unassigned_material,
     is_unassigned_material,
     get_texture_dimensions_from_material,
@@ -661,7 +662,8 @@ def _invoke_apply_setup(op, context, event):
         mat = source_mat
     else:
         try:
-            mat = resolve_material_for_image(image)
+            probe_name = get_selected_reflection_probe_name(context.scene)
+            mat = resolve_material_for_image(image, probe_name)
         except MaterialMappingConflictError as exc:
             op.report(
                 {'ERROR'},

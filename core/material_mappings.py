@@ -8,6 +8,7 @@ from .material_shader import infer_primary_shader_image, shader_images
 from .materials import (
     MATERIAL_SCHEMA_VERSION,
     clear_material_mapping,
+    get_material_reflection_probe_name,
     get_primary_image_from_material,
     material_name_for_image,
     set_material_primary_image,
@@ -56,14 +57,16 @@ def analyze_material_mappings(materials):
 
 
 def mapping_choice_conflicts(choices):
-    by_image = {}
+    by_image_and_probe = {}
     for material, image in choices:
         if image is None:
             continue
-        by_image.setdefault(image.as_pointer(), []).append(material)
+        probe_name = get_material_reflection_probe_name(material)
+        key = (image.as_pointer(), probe_name)
+        by_image_and_probe.setdefault(key, []).append(material)
     return {
-        pointer: materials
-        for pointer, materials in by_image.items()
+        key: materials
+        for key, materials in by_image_and_probe.items()
         if len(materials) > 1
     }
 

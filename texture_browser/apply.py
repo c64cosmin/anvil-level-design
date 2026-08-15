@@ -13,6 +13,7 @@ from ..core.library import is_library_object
 from ..core.logging import debug_log
 from ..core.materials import (
     get_image_from_material,
+    get_selected_reflection_probe_name,
     get_unassigned_material,
     ensure_material_slot,
     resolve_material_for_image,
@@ -37,7 +38,8 @@ def apply_texture_path_to_selection(filepath, obj, mode, scene):
         return None, 0
 
     set_previous_image(image)
-    material = resolve_material_for_image(image)
+    probe_name = get_selected_reflection_probe_name(scene)
+    material = resolve_material_for_image(image, probe_name)
     applied_face_count = apply_material_to_selection(
         material,
         obj,

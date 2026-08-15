@@ -14,6 +14,7 @@ from ...core.logging import debug_log
 from ...core.materials import (
     MaterialMappingConflictError,
     ensure_material_slot,
+    get_selected_reflection_probe_name,
     resolve_material_for_image,
 )
 from ...core.face_id import get_face_id_layer
@@ -64,7 +65,8 @@ def _active_or_previous_material():
         image = get_previous_image()
     if image is None:
         return None
-    return resolve_material_for_image(image)
+    probe_name = get_selected_reflection_probe_name(bpy.context.scene)
+    return resolve_material_for_image(image, probe_name)
 
 
 def _faces_coplanar_antiparallel(face_a, face_b):

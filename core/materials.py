@@ -23,6 +23,8 @@ _BLENDER_SUFFIX = re.compile(r'\.\d{3,}$')
 _UNASSIGNED_MATERIAL_NAME = "ANVIL_Unassigned"
 MATERIAL_SCHEMA_VERSION = 1
 DEFAULT_MATERIAL_NAME_PATTERN = "{filename}{extension}"
+FORNAX_REFLECTION_GROUP_KEY = "fornax_reflection_group"
+FORNAX_TEXTURE_FILENAME_KEY = "fornax_texture_filename"
 _last_material_count = 0
 
 
@@ -129,6 +131,20 @@ def clear_material_mapping(material):
     material.anvil_material_schema_version = 0
 
 
+def get_selected_reflection_probe_name(scene):
+    """Return the name of the currently selected reflection probe camera, or ""."""
+    props = getattr(scene, "level_design_props", None)
+    camera = getattr(props, "reflection_probe_camera", None) if props else None
+    return camera.name if camera is not None else ""
+
+
+def get_material_reflection_probe_name(material):
+    """Return this material's Fornax reflection probe tag, or ""."""
+    if material is None:
+        return ""
+    return material.get(FORNAX_REFLECTION_GROUP_KEY, "")
+
+
 def set_material_primary_image(material, image):
     if material is None or material.library is not None:
         raise ValueError("Only local materials can be mapped")
@@ -136,9 +152,11 @@ def set_material_primary_image(material, image):
         clear_material_mapping(material)
         return
 
+    material_probe = get_material_reflection_probe_name(material)
     conflicts = [
         mapped for mapped in materials_mapped_to_image(image)
         if mapped != material
+        and get_material_reflection_probe_name(mapped) == material_probe
     ]
     if conflicts:
         names = ", ".join(mapped.name for mapped in conflicts)
@@ -365,40 +383,43 @@ def ensure_material_slot(mesh, mat):
     return len(mesh.materials) - 1
 
 
-def find_material_with_image(image):
-    """Return the one local material explicitly mapped to this image, or None."""
+def find_material_with_image(image, probe_name=""):
+    """Return the one local material explicitly mapped to this image/probe, or None."""
     if image is None:
         return None
 
-    materials = materials_mapped_to_image(image)
+    materials = [
+        m for m in materials_mapped_to_image(image)
+        if get_material_reflection_probe_name(m) == probe_name
+    ]
     if len(materials) == 1:
         mat = materials[0]
         debug_log(
-            f"[FindMaterial] image={image.name!r} -> local material {mat.name!r}"
+            f"[FindMaterial] image={image.name!r} probe={probe_name!r} -> local material {mat.name!r}"
         )
         return mat
 
     if len(materials) > 1:
         names = ", ".join(material.name for material in materials)
         debug_log(
-            f"[FindMaterial] image={image.name!r} has conflicting mappings: {names}"
+            f"[FindMaterial] image={image.name!r} probe={probe_name!r} has conflicting mappings: {names}"
         )
         raise MaterialMappingConflictError(
             f"Image {image.name!r} is mapped to multiple materials: {names}"
         )
 
     debug_log(
-        f"[FindMaterial] image={image.name!r} -> no mapped local material"
+        f"[FindMaterial] image={image.name!r} probe={probe_name!r} -> no mapped local material"
     )
     return None
 
 
-def resolve_material_for_image(image):
+def resolve_material_for_image(image, probe_name=""):
     """Return the unique mapped material, creating one only when none exists."""
-    material = find_material_with_image(image)
+    material = find_material_with_image(image, probe_name)
     if material is not None:
         return material
-    return create_material_with_image(image)
+    return create_material_with_image(image, probe_name)
 
 
 def get_unassigned_material():
@@ -510,7 +531,7 @@ def get_default_material_settings():
     }
 
 
-def create_material_with_image(image):
+def create_material_with_image(image, probe_name=""):
     """Create a new material using the given image texture with scene default settings"""
     performance_report = begin_performance_operation_report(
         "Create Material",
@@ -523,7 +544,10 @@ def create_material_with_image(image):
         add_performance_detail(performance_report, "Image", image.name)
 
         with performance_stage(performance_report, "Check existing material mappings"):
-            mapped_materials = materials_mapped_to_image(image)
+            mapped_materials = [
+                m for m in materials_mapped_to_image(image)
+                if get_material_reflection_probe_name(m) == probe_name
+            ]
         if mapped_materials:
             names = ", ".join(material.name for material in mapped_materials)
             raise MaterialMappingConflictError(
@@ -532,6 +556,8 @@ def create_material_with_image(image):
 
         with performance_stage(performance_report, "Resolve material name and defaults"):
             material_name = _material_name_for_image(image)
+            if probe_name:
+                material_name = f"{material_name}_{probe_name}"
             defaults = get_default_material_settings()
             settings = dict(defaults)
         add_performance_detail(performance_report, "Material", material_name)
@@ -574,6 +600,10 @@ def create_material_with_image(image):
 
         with performance_stage(performance_report, "Create material datablock"):
             mat = bpy.data.materials.new(name=material_name)
+            _, _, image_filename, image_extension = _image_name_parts(image)
+            if probe_name:
+                mat[FORNAX_REFLECTION_GROUP_KEY] = probe_name
+            mat[FORNAX_TEXTURE_FILENAME_KEY] = f"{image_filename}{image_extension}"
         try:
             with performance_stage(performance_report, "Build canonical material shader"):
                 build_canonical_material_shader(mat, image, settings)

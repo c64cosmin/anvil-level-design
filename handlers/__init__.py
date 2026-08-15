@@ -58,6 +58,7 @@ from . import mode_tracking as _mode_tracking
 
 def register():
     _mode_tracking.subscribe_object_mode()
+    _mode_tracking.start_reflection_probe_tracking()
 
     if on_depsgraph_update not in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.append(on_depsgraph_update)
@@ -83,6 +84,7 @@ def register():
 
 def unregister():
     _mode_tracking.unregister_msgbus()
+    _mode_tracking.stop_reflection_probe_tracking()
 
     from .auto_hotspot import reset as reset_auto_hotspot
     reset_auto_hotspot()

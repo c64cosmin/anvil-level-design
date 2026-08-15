@@ -390,6 +390,10 @@ def update_prefab_random_scale_max_linked(self, context):
         _sync_prefab_random_scale_max_from_x(self)
 
 
+def _reflection_probe_camera_poll(self, obj):
+    return obj.type == 'CAMERA' and bool(obj.get("fornax_reflection_probe", False))
+
+
 class LevelDesignProperties(bpy.types.PropertyGroup):
     """Combined properties for Level Design Tools"""
 
@@ -503,6 +507,13 @@ class LevelDesignProperties(bpy.types.PropertyGroup):
         name="Texture as Alpha",
         description="Connect texture alpha to material alpha for new materials",
         default=False,
+    )
+
+    reflection_probe_camera: PointerProperty(
+        name="Reflection Probe",
+        description="Camera reflection probe to build material variants for. Leave empty for the default material",
+        type=bpy.types.Object,
+        poll=_reflection_probe_camera_poll,
     )
 
     default_vertex_colors: BoolProperty(
@@ -748,7 +759,6 @@ def register():
         min=0,
         options={'HIDDEN'},
     )
-
     # Prefab libraries (Anvil (Prefabs) panel)
     bpy.types.Scene.anvil_prefab_libraries = CollectionProperty(type=AnvilPrefabLibrary)
     bpy.types.Scene.anvil_prefab_active_library_index = IntProperty(
